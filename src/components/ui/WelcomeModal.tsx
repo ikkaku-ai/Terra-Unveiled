@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const Onboarding = () => {
+const WelcomeModal = () => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -105,4 +105,4 @@ const Onboarding = () => {
   );
 };
 
-export default Onboarding;
+export default WelcomeModal;

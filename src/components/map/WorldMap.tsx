@@ -2,8 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { MapContainer, TileLayer, useMapEvents, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import FogLayer from './FogLayer';
-import Onboarding from './Onboarding';
+import FogOverlay from './FogOverlay';
+import WelcomeModal from '../ui/WelcomeModal';
 
 // Leafletのデフォルトアイコン設定 (React環境でのバグ対策)
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -46,7 +46,7 @@ const MapController = ({ center }: { center: L.LatLng | null }) => {
   return null;
 };
 
-const Map = () => {
+const WorldMap = () => {
   const initialCenter: L.LatLngExpression = [35.6812, 139.7671]; // 東京駅
   
   // 初期データの読み込み
@@ -122,7 +122,7 @@ const Map = () => {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', backgroundColor: '#1a1a1a' }}>
-      <Onboarding />
+      <WelcomeModal />
       
       <MapContainer
         center={initialCenter}
@@ -134,7 +134,7 @@ const Map = () => {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <FogLayer visitedPoints={visitedPoints} radius={100} />
+        <FogOverlay visitedPoints={visitedPoints} radius={100} />
         <MapEvents onVisit={addVisit} />
         <MapController center={jumpToPos} />
         
@@ -267,4 +267,4 @@ const Map = () => {
   );
 };
 
-export default Map;
+export default WorldMap;

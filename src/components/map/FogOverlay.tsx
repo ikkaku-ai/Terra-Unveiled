@@ -2,12 +2,12 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 
-interface FogLayerProps {
+interface FogOverlayProps {
   visitedPoints: L.LatLng[];
   radius?: number; // 霧を晴らす半径（ピクセル）
 }
 
-const FogLayer = ({ visitedPoints, radius = 50 }: FogLayerProps) => {
+const FogOverlay = ({ visitedPoints, radius = 50 }: FogOverlayProps) => {
   const map = useMap();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -70,7 +70,7 @@ const FogLayer = ({ visitedPoints, radius = 50 }: FogLayerProps) => {
     };
   }, [map, draw]);
 
-  return null; // このコンポーネント自体はDOMをレンダリングしない（Leafletに直接追加するため）
+  return null;
 };
 
-export default FogLayer;
+export default FogOverlay;

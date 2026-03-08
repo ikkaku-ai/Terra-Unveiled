@@ -1,9 +1,10 @@
-import Map from './components/Map';
+import WorldMap from './components/map/WorldMap';
+import './styles/App.css';
 
 function App() {
   return (
     <div className="App">
-      <Map />
+      <WorldMap />
     </div>
   );
 }
