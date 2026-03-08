@@ -21,7 +21,7 @@ L.Marker.prototype.options.icon = DefaultIcon;
 // 現在地マーカー用のアイコン
 const CurrentPosIcon = L.divIcon({
   className: 'current-pos-icon',
-  html: `<div style="width: 15px; height: 15px; background: #007AFF; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,122,255,0.5);"></div>`,
+  html: `<div style="width: 15px; height: 15px; background: #007AFF; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 15px rgba(0,122,255,0.6);"></div>`,
   iconSize: [15, 15],
   iconAnchor: [7, 7]
 });
@@ -65,6 +65,9 @@ const WorldMap = () => {
 
   const [currentPos, setCurrentPos] = useState<L.LatLng | null>(null);
   const [isTracking, setIsTracking] = useState<boolean>(false);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    return localStorage.getItem('isDarkMode') === 'true';
+  });
   const [error, setError] = useState<string | null>(null);
   const [jumpToPos, setJumpToPos] = useState<L.LatLng | null>(null);
 
@@ -73,6 +76,10 @@ const WorldMap = () => {
     const toSave = visitedPoints.map(p => ({ lat: p.lat, lng: p.lng }));
     localStorage.setItem('visitedPoints', JSON.stringify(toSave));
   }, [visitedPoints]);
+
+  useEffect(() => {
+    localStorage.setItem('isDarkMode', String(isDarkMode));
+  }, [isDarkMode]);
 
   const addVisit = useCallback((latlng: L.LatLng) => {
     setVisitedPoints((prev) => {
@@ -117,8 +124,23 @@ const WorldMap = () => {
     };
   }, [isTracking, addVisit]);
 
-  // 探索率の擬似計算（訪問ポイント数に基づくスコア）
-  const discoveryScore = Math.min((visitedPoints.length / 500) * 100, 100).toFixed(1);
+  // 探索率とランクの計算
+  const scoreNum = Math.min((visitedPoints.length / 500) * 100, 100);
+  const discoveryScore = scoreNum.toFixed(1);
+
+  const getRank = (score: number) => {
+    if (score >= 80) return { title: '伝説の探検家', color: '#ff4d4f' };
+    if (score >= 50) return { title: '世界を知る者', color: '#722ed1' };
+    if (score >= 20) return { title: '熟練の冒険家', color: '#1890ff' };
+    if (score >= 5) return { title: '駆け出しの旅人', color: '#52c41a' };
+    return { title: '新米探索者', color: '#8c8c8c' };
+  };
+
+  const rank = getRank(scoreNum);
+
+  // 地図タイルのURL
+  const lightTile = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+  const darkTile = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100vh', backgroundColor: '#1a1a1a' }}>
@@ -128,11 +150,11 @@ const WorldMap = () => {
         center={initialCenter}
         zoom={13}
         style={{ width: '100%', height: '100%' }}
-        zoomControl={false} // デフォルトのズームコントロールを非表示
+        zoomControl={false}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={isDarkMode ? '&copy; <a href="https://carto.com/">CARTO</a>' : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}
+          url={isDarkMode ? darkTile : lightTile}
         />
         <FogOverlay visitedPoints={visitedPoints} radius={100} />
         <MapEvents onVisit={addVisit} />
@@ -163,19 +185,56 @@ const WorldMap = () => {
           boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
           backdropFilter: 'blur(10px)',
           border: '1px solid rgba(255,255,255,0.4)',
-          pointerEvents: 'auto'
+          pointerEvents: 'auto',
+          minWidth: '200px'
         }}>
           <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1a1a1a' }}>Terra-Unveiled</h2>
-          <div style={{ display: 'flex', alignItems: 'center', marginTop: '5px' }}>
-            <div style={{ width: '100px', height: '6px', backgroundColor: '#eee', borderRadius: '3px', marginRight: '10px', overflow: 'hidden' }}>
-              <div style={{ width: `${discoveryScore}%`, height: '100%', backgroundColor: '#007AFF', transition: 'width 0.5s ease' }}></div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', margin: '5px 0' }}>
+            <span style={{ 
+              fontSize: '11px', 
+              fontWeight: 'bold', 
+              backgroundColor: rank.color, 
+              color: 'white', 
+              padding: '2px 8px', 
+              borderRadius: '10px',
+              textTransform: 'uppercase'
+            }}>
+              Rank: {rank.title}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: '8px' }}>
+            <div style={{ flex: 1, height: '6px', backgroundColor: '#eee', borderRadius: '3px', marginRight: '10px', overflow: 'hidden' }}>
+              <div style={{ width: `${discoveryScore}%`, height: '100%', backgroundColor: rank.color, transition: 'width 0.5s ease' }}></div>
             </div>
-            <span style={{ fontSize: '13px', fontWeight: '600', color: '#666' }}>探索度: {discoveryScore}%</span>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: '#444' }}>{discoveryScore}%</span>
           </div>
         </div>
 
         {/* Controls Container */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', pointerEvents: 'auto' }}>
+          <button 
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            style={{
+              width: '50px',
+              height: '50px',
+              borderRadius: '25px',
+              backgroundColor: isDarkMode ? '#1a1a1a' : 'white',
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              cursor: 'pointer',
+              fontSize: '20px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              transition: 'all 0.2s'
+            }}
+            title={isDarkMode ? 'ライトモードに切替' : 'ダークモードに切替'}
+          >
+            {isDarkMode ? '🌙' : '☀️'}
+          </button>
+
           <button 
             onClick={() => setIsTracking(!isTracking)}
             style={{
