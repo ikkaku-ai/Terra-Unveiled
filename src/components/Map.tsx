@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
-import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, useMapEvents, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import FogLayer from './FogLayer';
+import Onboarding from './Onboarding';
 
 // Leafletのデフォルトアイコン設定 (React環境でのバグ対策)
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -17,12 +18,31 @@ let DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
+// 現在地マーカー用のアイコン
+const CurrentPosIcon = L.divIcon({
+  className: 'current-pos-icon',
+  html: `<div style="width: 15px; height: 15px; background: #007AFF; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,122,255,0.5);"></div>`,
+  iconSize: [15, 15],
+  iconAnchor: [7, 7]
+});
+
 const MapEvents = ({ onVisit }: { onVisit: (latlng: L.LatLng) => void }) => {
   useMapEvents({
     click(e) {
       onVisit(e.latlng);
     },
   });
+  return null;
+};
+
+// 地図操作用ヘルパーコンポーネント
+const MapController = ({ center }: { center: L.LatLng | null }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (center) {
+      map.flyTo(center, map.getZoom(), { animate: true, duration: 1.5 });
+    }
+  }, [center, map]);
   return null;
 };
 
@@ -43,8 +63,10 @@ const Map = () => {
     return [L.latLng(35.6812, 139.7671)];
   });
 
+  const [currentPos, setCurrentPos] = useState<L.LatLng | null>(null);
   const [isTracking, setIsTracking] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [jumpToPos, setJumpToPos] = useState<L.LatLng | null>(null);
 
   // データの保存
   useEffect(() => {
@@ -54,7 +76,6 @@ const Map = () => {
 
   const addVisit = useCallback((latlng: L.LatLng) => {
     setVisitedPoints((prev) => {
-      // 直前のポイントと近すぎる（例: 5m以内）場合は追加しない
       const lastPoint = prev[prev.length - 1];
       if (lastPoint && latlng.distanceTo(lastPoint) < 5) {
         return prev;
@@ -71,7 +92,9 @@ const Map = () => {
       watchId = navigator.geolocation.watchPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          addVisit(L.latLng(latitude, longitude));
+          const pos = L.latLng(latitude, longitude);
+          setCurrentPos(pos);
+          addVisit(pos);
         },
         (err) => {
           setError(err.message);
@@ -83,6 +106,8 @@ const Map = () => {
           maximumAge: 0
         }
       );
+    } else {
+      setCurrentPos(null);
     }
 
     return () => {
@@ -92,12 +117,18 @@ const Map = () => {
     };
   }, [isTracking, addVisit]);
 
+  // 探索率の擬似計算（訪問ポイント数に基づくスコア）
+  const discoveryScore = Math.min((visitedPoints.length / 500) * 100, 100).toFixed(1);
+
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100vh', backgroundColor: '#1a1a1a' }}>
+      <Onboarding />
+      
       <MapContainer
         center={initialCenter}
         zoom={13}
         style={{ width: '100%', height: '100%' }}
+        zoomControl={false} // デフォルトのズームコントロールを非表示
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -105,52 +136,133 @@ const Map = () => {
         />
         <FogLayer visitedPoints={visitedPoints} radius={100} />
         <MapEvents onVisit={addVisit} />
+        <MapController center={jumpToPos} />
+        
+        {currentPos && (
+          <Marker position={currentPos} icon={CurrentPosIcon} />
+        )}
       </MapContainer>
       
+      {/* UI Overlay */}
       <div style={{
         position: 'absolute',
-        top: '10px',
-        left: '50px',
+        top: '20px',
+        left: '20px',
+        right: '20px',
         zIndex: 1000,
-        background: 'white',
-        padding: '15px',
-        borderRadius: '8px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        maxWidth: '300px'
+        pointerEvents: 'none',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start'
       }}>
-        <h3 style={{ margin: '0 0 10px 0' }}>Terra-Unveiled</h3>
-        <p style={{ fontSize: '14px', color: '#666' }}>地図をクリックするか、歩いて霧を晴らしてください</p>
-        
-        <div style={{ margin: '15px 0' }}>
+        {/* Stats Card */}
+        <div style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          padding: '15px 25px',
+          borderRadius: '20px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+          backdropFilter: 'blur(10px)',
+          border: '1px solid rgba(255,255,255,0.4)',
+          pointerEvents: 'auto'
+        }}>
+          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1a1a1a' }}>Terra-Unveiled</h2>
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: '5px' }}>
+            <div style={{ width: '100px', height: '6px', backgroundColor: '#eee', borderRadius: '3px', marginRight: '10px', overflow: 'hidden' }}>
+              <div style={{ width: `${discoveryScore}%`, height: '100%', backgroundColor: '#007AFF', transition: 'width 0.5s ease' }}></div>
+            </div>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: '#666' }}>探索度: {discoveryScore}%</span>
+          </div>
+        </div>
+
+        {/* Controls Container */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', pointerEvents: 'auto' }}>
           <button 
             onClick={() => setIsTracking(!isTracking)}
             style={{
-              width: '100%',
-              padding: '10px',
-              backgroundColor: isTracking ? '#ff4d4f' : '#1890ff',
-              color: 'white',
+              width: '50px',
+              height: '50px',
+              borderRadius: '25px',
+              backgroundColor: isTracking ? '#007AFF' : 'white',
               border: 'none',
-              borderRadius: '4px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
               cursor: 'pointer',
-              fontWeight: 'bold'
+              fontSize: '20px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              transition: 'all 0.2s'
             }}
+            title={isTracking ? 'GPS追跡を停止' : 'GPS追跡を開始'}
           >
-            {isTracking ? 'GPS追跡停止' : 'GPS追跡開始'}
+            {isTracking ? '📡' : '🛰️'}
           </button>
-        </div>
 
-        {error && <p style={{ color: 'red', fontSize: '12px' }}>Error: {error}</p>}
-        
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '13px' }}>訪れた数: {visitedPoints.length}</span>
+          {isTracking && currentPos && (
+            <button 
+              onClick={() => setJumpToPos(currentPos)}
+              style={{
+                width: '50px',
+                height: '50px',
+                borderRadius: '25px',
+                backgroundColor: 'white',
+                border: 'none',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                cursor: 'pointer',
+                fontSize: '20px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}
+              title="現在地にジャンプ"
+            >
+              🎯
+            </button>
+          )}
+
           <button 
-            onClick={() => setVisitedPoints([L.latLng(35.6812, 139.7671)])}
-            style={{ padding: '4px 8px', fontSize: '12px' }}
+            onClick={() => {
+                if (window.confirm('これまでの探索データを消去しますか？')) {
+                    setVisitedPoints([L.latLng(35.6812, 139.7671)]);
+                    localStorage.removeItem('visitedPoints');
+                }
+            }}
+            style={{
+              width: '50px',
+              height: '50px',
+              borderRadius: '25px',
+              backgroundColor: 'white',
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              cursor: 'pointer',
+              fontSize: '20px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}
+            title="リセット"
           >
-            リセット
+            🗑️
           </button>
         </div>
       </div>
+
+      {error && (
+        <div style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'rgba(255, 77, 79, 0.9)',
+          color: 'white',
+          padding: '8px 20px',
+          borderRadius: '20px',
+          fontSize: '12px',
+          zIndex: 2000,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+        }}>
+          ⚠️ GPS Error: {error}
+        </div>
+      )}
     </div>
   );
 };
